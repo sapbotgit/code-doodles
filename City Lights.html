@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>City Lights - Arcade Action</title>
+   <style>
+       @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+       
+       * {
+           margin: 0;
+           padding: 0;
+           box-sizing: border-box;
+       }
+       
+       body {
+           background: #0a0a0a;
+           color: #fff;
+           font-family: 'Orbitron', monospace;
+           overflow: hidden;
+           display: flex;
+           justify-content: center;
+           align-items: center;
+           min-height: 100vh;
+       }
+       
+       #gameContainer {
+           position: relative;
+           width: 100vw;
+           height: 100vh;
+           display: flex;
+           justify-content: center;
+           align-items: center;
+       }
+       
+       canvas {
+           box-shadow: 0 0 50px rgba(0, 150, 255, 0.5);
+           border: 2px solid #333;
+           image-rendering: pixelated;
+       }
+       
+       #ui {
+           position: absolute;
+           top: 20px;
+           left: 20px;
+           font-size: 18px;
+           text-shadow: 0 0 10px #00ffff;
+           pointer-events: none;
+           z-index: 10;
+       }
+       
+       #gameOver {
+           position: absolute;
+           top: 50%;
+           left: 50%;
+           transform: translate(-50%, -50%);
+           text-align: center;
+           display: none;
+           background: rgba(0,0,0,0.9);
+           padding: 40px;
+           border: 3px solid #ff0066;
+           box-shadow: 0 0 30px #ff0066;
+           z-index: 20;
+       }
+       
+       #gameOver h2 {
+           font-size: 48px;
+           color: #ff0066;
+           margin-bottom: 20px;
+           text-shadow: 0 0 20px #ff0066;
+       }
+       
+       #gameOver button {
+           font-family: 'Orbitron', monospace;
+           font-size: 24px;
+           padding: 15px 30px;
+           background: #00ffff;
+           color: #000;
+           border: none;
+           cursor: pointer;
+           margin-top: 20px;
+           transition: all 0.3s;
+       }
+       
+       #gameOver button:hover {
+           background: #fff;
+           box-shadow: 0 0 20px #00ffff;
+       }
+       
+       #startScreen {
+           position: absolute;
+           top: 50%;
+           left: 50%;
+           transform: translate(-50%, -50%);
+           text-align: center;
+           background: rgba(0,0,0,0.95);
+           padding: 60px;
+           border: 3px solid #00ffff;
+           box-shadow: 0 0 50px rgba(0, 255, 255, 0.5);
+           z-index: 20;
+       }
+       
+       #startScreen h1 {
+           font-size: 64px;
+           margin-bottom: 20px;
+           background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00);
+           -webkit-background-clip: text;
+           -webkit-text-fill-color: transparent;
+           background-clip: text;
+           text-shadow: none;
+           animation: glow 2s ease-in-out infinite alternate;
+       }
+       
+       @keyframes glow {
+           from { filter: drop-shadow(0 0 20px #00ffff); }
+           to { filter: drop-shadow(0 0 40px #ff00ff); }
+       }
+       
+       #startScreen p {
+           font-size: 18px;
+           margin: 10px 0;
+           color: #aaa;
+       }
+       
+       #startScreen .controls {
+           margin: 30px 0;
+           padding: 20px;
+           background: rgba(255,255,255,0.05);
+           border-left: 4px solid #00ffff;
+           text-align: left;
+       }
+       
+       #startScreen button {
+           font-family: 'Orbitron', monospace;
+           font-size: 28px;
+           padding: 20px 40px;
+           background: linear-gradient(45deg, #00ffff, #0099ff);
+           color: #000;
+           border: none;
+           cursor: pointer;
+           margin-top: 30px;
+           font-weight: bold;
+           transition: all 0.3s;
+           text-transform: uppercase;
+       }
+       
+       #startScreen button:hover {
+           transform: scale(1.1);
+           box-shadow: 0 0 40px #00ffff;
+       }
+       
+       .hud-item {
+           margin: 5px 0;
+       }
+       
+       .warning {
+           color: #ff0066;
+           animation: blink 0.5s infinite;
+       }
+       
+       @keyframes blink {
+           0%, 50% { opacity: 1; }
+           51%, 100% { opacity: 0.3; }
+       }
+       
+       #autopilotIndicator {
+           position: absolute;
+           top: 20px;
+           right: 20px;
+           color: #00ff00;
+           font-size: 24px;
+           text-shadow: 0 0 10px #00ff00;
+           display: none;
+           z-index: 10;
+       }
+       
+       /* Debug input styles */
+       #debugSection {
+           margin-top: 20px;
+           padding: 15px;
+           background: rgba(255,170,0,0.1);
+           border: 2px solid #ffaa00;
+           border-radius: 5px;
+       }
+       
+       #debugSection label {
+           display: block;
+           color: #ffaa00;
+           font-size: 14px;
+           margin-bottom: 8px;
+       }
+       
+       #debugInput {
+           font-family: 'Orbitron', monospace;
+           font-size: 18px;
+           width: 80px;
+           padding: 8px;
+           background: #1a1a1a;
+           border: 2px solid #ffaa00;
+           color: #fff;
+           text-align: center;
+           border-radius: 3px;
+       }
+       
+       #debugInput:focus {
+           outline: none;
+           box-shadow: 0 0 10px #ffaa00;
+       }
+       
+       #debugButton {
+           font-family: 'Orbitron', monospace;
+           font-size: 16px;
+           padding: 10px 20px;
+           background: #ffaa00;
+           color: #000;
+           border: none;
+           cursor: pointer;
+           margin-left: 10px;
+           border-radius: 3px;
+           font-weight: bold;
+           transition: all 0.3s;
+       }
+       
+       #debugButton:hover {
+           background: #ffcc00;
+           box-shadow: 0 0 15px #ffaa00;
+       }
+   </style>
+</head>
+<body>
+   <div id="gameContainer">
+       <canvas id="gameCanvas"></canvas>
+       
+       <div id="ui">
+           <div class="hud-item">РАУНД: <span id="roundDisplay">0</span></div>
+           <div class="hud-item">ОЧКИ: <span id="scoreDisplay">0</span></div>
+           <div class="hud-item">ЛАМП: <span id="lampsDisplay">0/0</span></div>
+           <div class="hud-item" id="timeDisplay"></div>
+           <div class="hud-item" id="hooliganWarning" style="display:none;" class="warning">⚠ ХУЛИГАН!</div>
+       </div>
+       
+       <div id="autopilotIndicator">🤖 АВТОПИЛОТ (F2)</div>
+       
+       <div id="startScreen">
+           <h1>CITY LIGHTS</h1>
+           <p>Аркадный экшен о мастере по ремонту фонарей</p>
+           <div class="controls">
+               <p><strong>Управление:</strong></p>
+               <p>🎮 Геймпад: Левый стик / D-Pad для движения</p>
+               <p>⌨️ Клавиатура: WASD или Стрелки для движения</p>
+               <p>🤖 F2 - Включить/выключить автопилот</p>
+               <p>🎯 Цель: Чините лампы до истечения времени!</p>
+               <p>⚠️ С 10 раунда: Останавливайте хулиганов!</p>
+               
+               <!-- Debug input field -->
+               <div id="debugSection">
+                   <label for="debugInput">🐛 Debug: Начать с раунда</label>
+                   <input type="number" id="debugInput" min="1" max="50" value="10" placeholder="1-50">
+                   <button id="debugButton" onclick="debugStart()">СТАРТ</button>
+               </div>
+           </div>
+           <button onclick="startGame()">НАЧАТЬ ИГРУ (Раунд 1)</button>
+       </div>
+       
+       <div id="gameOver">
+           <h2>ИГРА ОКОНЧЕНА</h2>
+           <p style="font-size: 24px; margin: 20px 0;">Раунд: <span id="finalRound">0</span></p>
+           <p style="font-size: 24px; margin: 20px 0;">Очки: <span id="finalScore">0</span></p>
+           <button onclick="restartGame()">ИГРАТЬ СНОВА</button>
+       </div>
+   </div>
+
+   <script>
+       const canvas = document.getElementById('gameCanvas');
+       const ctx = canvas.getContext('2d');
+       
+       // Game state
+       let gameState = 'start';
+       let round = 0;
+       let score = 0;
+       let lamps = [];
+       let particles = [];
+       let hooligans = [];
+       let lastTime = 0;
+       let gamepadIndex = null;
+       let roundTransitionTimer = 0;
+       let isRoundTransition = false;
+       let autopilotEnabled = false;
+       let debugStartRound = 0;
+       
+       // Player
+       const player = {
+           x: 0,
+           y: 0,
+           radius: 15,
+           speed: 300,
+           color: '#00ffff',
+           vx: 0,
+           vy: 0,
+           targetLamp: null
+       };
+       
+       // Constants
+       const CANVAS_WIDTH = 1280;
+       const CANVAS_HEIGHT = 720;
+       const LAMP_RADIUS = 25;
+       const PLAYER_RADIUS = 15;
+       const FIX_DISTANCE = 40;
+       const STOP_HOOLIGAN_DISTANCE = 60;
+       
+       // Resize canvas
+       function resizeCanvas() {
+           const aspect = CANVAS_WIDTH / CANVAS_HEIGHT;
+           const windowAspect = window.innerWidth / window.innerHeight;
+           
+           let displayWidth, displayHeight;
+           
+           if (windowAspect > aspect) {
+               displayHeight = window.innerHeight;
+               displayWidth = displayHeight * aspect;
+           } else {
+               displayWidth = window.innerWidth;
+               displayHeight = displayWidth / aspect;
+           }
+           
+           canvas.style.width = displayWidth + 'px';
+           canvas.style.height = displayHeight + 'px';
+           canvas.width = CANVAS_WIDTH;
+           canvas.height = CANVAS_HEIGHT;
+       }
+       
+       window.addEventListener('resize', resizeCanvas);
+       resizeCanvas();
+       
+       // Input handling
+       const keys = {};
+       window.addEventListener('keydown', (e) => {
+           keys[e.key.toLowerCase()] = true;
+           
+           // F2 для автопилота
+           if (e.key === 'F2') {
+               toggleAutopilot();
+           }
+       });
+       window.addEventListener('keyup', (e) => {
+           keys[e.key.toLowerCase()] = false;
+       });
+       
+       // Debug start function
+       function debugStart() {
+           const input = document.getElementById('debugInput');
+           const r = parseInt(input.value);
+           
+           if (r > 0 && r <= 50) {
+               debugStartRound = r;
+               document.getElementById('startScreen').style.display = 'none';
+               startGame();
+           } else {
+               alert("Введите число от 1 до 50");
+               input.value = 10;
+           }
+       }
+       
+       // Allow Enter key in input field
+       document.getElementById('debugInput').addEventListener('keypress', function(e) {
+           if (e.key === 'Enter') {
+               debugStart();
+           }
+       });
+       
+       function toggleAutopilot() {
+           if (gameState !== 'playing') return;
+           autopilotEnabled = !autopilotEnabled;
+           document.getElementById('autopilotIndicator').style.display = autopilotEnabled ? 'block' : 'none';
+           if (autopilotEnabled) {
+               player.targetLamp = null;
+           }
+       }
+       
+       // Gamepad handling
+       window.addEventListener('gamepadconnected', (e) => {
+           console.log('Gamepad connected:', e.gamepad.id);
+           gamepadIndex = e.gamepad.index;
+       });
+       
+       window.addEventListener('gamepaddisconnected', (e) => {
+           if (gamepadIndex === e.gamepad.index) {
+               gamepadIndex = null;
+           }
+       });
+       
+       function getGamepadInput() {
+           if (gamepadIndex === null) return { x: 0, y: 0 };
+           const gamepad = navigator.getGamepads()[gamepadIndex];
+           if (!gamepad) return { x: 0, y: 0 };
+           
+           let x = gamepad.axes[0];
+           let y = gamepad.axes[1];
+           
+           if (gamepad.buttons[12]?.pressed) y = -1;
+           if (gamepad.buttons[13]?.pressed) y = 1;
+           if (gamepad.buttons[14]?.pressed) x = -1;
+           if (gamepad.buttons[15]?.pressed) x = 1;
+           
+           const deadzone = 0.15;
+           if (Math.abs(x) < deadzone) x = 0;
+           if (Math.abs(y) < deadzone) y = 0;
+           
+           return { x, y };
+       }
+       
+       function getKeyboardInput() {
+           let x = 0, y = 0;
+           if (keys['w'] || keys['arrowup']) y -= 1;
+           if (keys['s'] || keys['arrowdown']) y += 1;
+           if (keys['a'] || keys['arrowleft']) x -= 1;
+           if (keys['d'] || keys['arrowright']) x += 1;
+           
+           if (x !== 0 || y !== 0) {
+               const len = Math.sqrt(x*x + y*y);
+               x /= len;
+               y /= len;
+           }
+           
+           return { x, y };
+       }
+       
+       // Автопилот
+       function getAutopilotInput() {
+           if (!autopilotEnabled || lamps.length === 0) {
+               return { x: 0, y: 0 };
+           }
+           
+           let target = null;
+           let minDist = Infinity;
+           
+           for (let lamp of lamps) {
+               if (lamp.state === 'hooligan' && lamp.hooligan) {
+                   const dist = Math.hypot(player.x - lamp.hooligan.x, player.y - lamp.hooligan.y);
+                   if (dist < minDist) {
+                       minDist = dist;
+                       target = { x: lamp.hooligan.x, y: lamp.hooligan.y, type: 'hooligan', lamp: lamp };
+                   }
+               }
+           }
+           
+           if (!target) {
+               for (let lamp of lamps) {
+                   if (lamp.state === 'broken') {
+                       const dist = Math.hypot(player.x - lamp.x, player.y - lamp.y);
+                       if (dist < minDist) {
+                           minDist = dist;
+                           target = { x: lamp.x, y: lamp.y, type: 'broken', lamp: lamp };
+                       }
+                   }
+               }
+           }
+           
+           if (!target) {
+               for (let lamp of lamps) {
+                   if (lamp.state === 'working') {
+                       const dist = Math.hypot(player.x - lamp.x, player.y - lamp.y);
+                       if (dist < minDist) {
+                           minDist = dist;
+                           target = { x: lamp.x, y: lamp.y, type: 'working', lamp: lamp };
+                       }
+                   }
+               }
+           }
+           
+           if (!target) {
+               return { x: 0, y: 0 };
+           }
+           
+           const dx = target.x - player.x;
+           const dy = target.y - player.y;
+           const dist = Math.hypot(dx, dy);
+           
+           if (target.type === 'broken' && dist < FIX_DISTANCE - 5) {
+               return { x: 0, y: 0 };
+           }
+           
+           if (target.type === 'hooligan' && dist < STOP_HOOLIGAN_DISTANCE - 5) {
+               return { x: 0, y: 0 };
+           }
+           
+           if (target.type === 'working') {
+               const optimalDist = FIX_DISTANCE + 10;
+               if (dist < optimalDist) {
+                   return { x: 0, y: 0 };
+               }
+           }
+           
+           if (dist > 0) {
+               return { x: dx / dist, y: dy / dist };
+           }
+           
+           return { x: 0, y: 0 };
+       }
+       
+       // Lamp class
+       class Lamp {
+           constructor(x, y) {
+               this.x = x;
+               this.y = y;
+               this.state = 'working';
+               this.timer = 0;
+               this.maxTime = 5 + (round * 0.5);
+               this.blinkPhase = Math.random() * Math.PI * 2;
+               this.hooligan = null;
+               this.fixProgress = 0;
+           }
+           
+           update(dt) {
+               this.blinkPhase += dt * 3;
+               
+               if (this.state === 'broken') {
+                   this.timer -= dt;
+                   if (this.timer <= 0) {
+                       gameOver();
+                   }
+               } else if (this.state === 'hooligan' && this.hooligan) {
+                   this.hooligan.update(dt);
+                   
+                   const dist = Math.hypot(player.x - this.hooligan.x, player.y - this.hooligan.y);
+                   if (dist < STOP_HOOLIGAN_DISTANCE) {
+                       this.state = 'working';
+                       this.hooligan = null;
+                       score += 50;
+                       createParticles(this.x, this.y, '#00ff00', 10);
+                       
+                       const workingLamps = lamps.filter(l => l.state === 'working');
+                       if (workingLamps.length > 0 && nextBreakTimer <= 0) {
+                           nextBreakTimer = Math.random() * 2 + 1;
+                       }
+                   } else {
+                       const lampDist = Math.hypot(this.x - this.hooligan.x, this.y - this.hooligan.y);
+                       if (lampDist < 10) {
+                           this.breakLamp();
+                       }
+                   }
+               }
+           }
+           
+           breakLamp() {
+               this.state = 'broken';
+               this.timer = this.maxTime;
+               this.hooligan = null;
+               createParticles(this.x, this.y, '#ff0066', 15);
+           }
+           
+           startHooligan() {
+               if (round < 10) return;
+               
+               const side = Math.floor(Math.random() * 4);
+               let hx, hy;
+               switch(side) {
+                   case 0: hx = this.x; hy = -50; break;
+                   case 1: hx = CANVAS_WIDTH + 50; hy = this.y; break;
+                   case 2: hx = this.x; hy = CANVAS_HEIGHT + 50; break;
+                   case 3: hx = -50; hy = this.y; break;
+               }
+               
+               this.hooligan = {
+                   x: hx,
+                   y: hy,
+                   speed: 80 + round * 5,
+                   targetX: this.x,
+                   targetY: this.y,
+                   update: function(dt) {
+                       const dx = this.targetX - this.x;
+                       const dy = this.targetY - this.y;
+                       const dist = Math.hypot(dx, dy);
+                       if (dist > 0) {
+                           this.x += (dx / dist) * this.speed * dt;
+                           this.y += (dy / dist) * this.speed * dt;
+                       }
+                   }
+               };
+               this.state = 'hooligan';
+           }
+           
+           draw(ctx) {
+               const glowIntensity = this.state === 'working' ? 0.8 + Math.sin(this.blinkPhase) * 0.2 : 0.2;
+               
+               ctx.fillStyle = '#444';
+               ctx.fillRect(this.x - 3, this.y, 6, 100);
+               
+               ctx.fillStyle = '#222';
+               ctx.beginPath();
+               ctx.arc(this.x, this.y, LAMP_RADIUS, 0, Math.PI * 2);
+               ctx.fill();
+               
+               if (this.state !== 'broken') {
+                   const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, LAMP_RADIUS * 3);
+                   const color = this.state === 'hooligan' ? '#ff0066' : '#ffff00';
+                   gradient.addColorStop(0, color);
+                   gradient.addColorStop(0.3, color + '80');
+                   gradient.addColorStop(1, 'transparent');
+                   
+                   ctx.fillStyle = gradient;
+                   ctx.globalAlpha = glowIntensity;
+                   ctx.beginPath();
+                   ctx.arc(this.x, this.y, LAMP_RADIUS * 3, 0, Math.PI * 2);
+                   ctx.fill();
+                   ctx.globalAlpha = 1;
+                   
+                   ctx.fillStyle = this.state === 'hooligan' ? '#ff0066' : '#ffffaa';
+                   ctx.beginPath();
+                   ctx.arc(this.x, this.y, LAMP_RADIUS * 0.6, 0, Math.PI * 2);
+                   ctx.fill();
+               } else {
+                   ctx.fillStyle = '#333';
+                   ctx.beginPath();
+                   ctx.arc(this.x, this.y, LAMP_RADIUS * 0.6, 0, Math.PI * 2);
+                   ctx.fill();
+                   
+                   ctx.strokeStyle = '#666';
+                   ctx.lineWidth = 2;
+                   ctx.beginPath();
+                   ctx.moveTo(this.x - 10, this.y - 5);
+                   ctx.lineTo(this.x + 5, this.y + 10);
+                   ctx.moveTo(this.x + 8, this.y - 8);
+                   ctx.lineTo(this.x - 5, this.y + 5);
+                   ctx.stroke();
+                   
+                   const progress = this.timer / this.maxTime;
+                   ctx.strokeStyle = progress > 0.3 ? '#00ff00' : '#ff0000';
+                   ctx.lineWidth = 4;
+                   ctx.beginPath();
+                   ctx.arc(this.x, this.y - 40, 15, -Math.PI/2, -Math.PI/2 + progress * Math.PI * 2);
+                   ctx.stroke();
+               }
+               
+               if (this.hooligan) {
+                   this.drawHooligan(ctx);
+               }
+           }
+           
+           drawHooligan(ctx) {
+               const h = this.hooligan;
+               
+               ctx.fillStyle = '#ff0066';
+               ctx.beginPath();
+               ctx.arc(h.x, h.y, 12, 0, Math.PI * 2);
+               ctx.fill();
+               
+               ctx.fillStyle = '#fff';
+               ctx.beginPath();
+               ctx.arc(h.x - 4, h.y - 2, 3, 0, Math.PI * 2);
+               ctx.arc(h.x + 4, h.y - 2, 3, 0, Math.PI * 2);
+               ctx.fill();
+               
+               ctx.strokeStyle = '#8B4513';
+               ctx.lineWidth = 4;
+               ctx.beginPath();
+               ctx.moveTo(h.x + 8, h.y);
+               ctx.lineTo(h.x + 20, h.y - 15);
+               ctx.stroke();
+               
+               ctx.strokeStyle = '#ff0066';
+               ctx.lineWidth = 2;
+               ctx.setLineDash([5, 5]);
+               ctx.beginPath();
+               ctx.moveTo(h.x, h.y);
+               ctx.lineTo(this.x, this.y);
+               ctx.stroke();
+               ctx.setLineDash([]);
+           }
+       }
+       
+       class Particle {
+           constructor(x, y, color) {
+               this.x = x;
+               this.y = y;
+               this.vx = (Math.random() - 0.5) * 200;
+               this.vy = (Math.random() - 0.5) * 200;
+               this.life = 1;
+               this.color = color;
+               this.size = Math.random() * 4 + 2;
+           }
+           
+           update(dt) {
+               this.x += this.vx * dt;
+               this.y += this.vy * dt;
+               this.life -= dt * 2;
+               this.vy += 300 * dt;
+           }
+           
+           draw(ctx) {
+               ctx.globalAlpha = Math.max(0, this.life);
+               ctx.fillStyle = this.color;
+               ctx.beginPath();
+               ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+               ctx.fill();
+               ctx.globalAlpha = 1;
+           }
+       }
+       
+       function createParticles(x, y, color, count) {
+           for (let i = 0; i < count; i++) {
+               particles.push(new Particle(x, y, color));
+           }
+       }
+       
+       function initRound() {
+           lamps = [];
+           const lampCount = round === 0 ? 0 : round * 2;
+           
+           if (round === 0) return;
+           
+           const cols = Math.ceil(Math.sqrt(lampCount));
+           const rows = Math.ceil(lampCount / cols);
+           const spacingX = (CANVAS_WIDTH - 200) / cols;
+           const spacingY = (CANVAS_HEIGHT - 200) / rows;
+           const startX = 100 + spacingX / 2;
+           const startY = 100 + spacingY / 2;
+           
+           for (let i = 0; i < lampCount; i++) {
+               const col = i % cols;
+               const row = Math.floor(i / cols);
+               lamps.push(new Lamp(
+                   startX + col * spacingX + (Math.random() - 0.5) * 50,
+                   startY + row * spacingY + (Math.random() - 0.5) * 50
+               ));
+           }
+           
+           nextBreakTimer = Math.random() * 2 + 1;
+       }
+       
+       let nextBreakTimer = 0;
+       
+       function breakRandomLamp() {
+           const workingLamps = lamps.filter(l => l.state === 'working');
+           if (workingLamps.length === 0) return;
+           
+           const lamp = workingLamps[Math.floor(Math.random() * workingLamps.length)];
+           
+           if (round >= 10 && Math.random() < 0.4) {
+               lamp.startHooligan();
+           } else {
+               lamp.breakLamp();
+           }
+           
+           const remainingWorking = lamps.filter(l => l.state === 'working');
+           if (remainingWorking.length > 0) {
+               nextBreakTimer = Math.random() * 3 + 2;
+           } else {
+               nextBreakTimer = 0;
+           }
+       }
+       
+       function update(dt) {
+           if (gameState !== 'playing') return;
+           
+           if (isRoundTransition) {
+               roundTransitionTimer -= dt;
+               if (roundTransitionTimer <= 0) {
+                   isRoundTransition = false;
+                   startRound();
+               }
+               return;
+           }
+           
+           let inputX = 0;
+           let inputY = 0;
+           
+           if (autopilotEnabled) {
+               const autoInput = getAutopilotInput();
+               inputX = autoInput.x;
+               inputY = autoInput.y;
+           } else {
+               const gamepadInput = getGamepadInput();
+               const keyboardInput = getKeyboardInput();
+               
+               if (Math.abs(gamepadInput.x) > Math.abs(keyboardInput.x)) {
+                   inputX = gamepadInput.x;
+               } else {
+                   inputX = keyboardInput.x;
+               }
+               
+               if (Math.abs(gamepadInput.y) > Math.abs(keyboardInput.y)) {
+                   inputY = gamepadInput.y;
+               } else {
+                   inputY = keyboardInput.y;
+               }
+           }
+           
+           player.vx = inputX * player.speed;
+           player.vy = inputY * player.speed;
+           
+           player.x += player.vx * dt;
+           player.y += player.vy * dt;
+           
+           player.x = Math.max(PLAYER_RADIUS, Math.min(CANVAS_WIDTH - PLAYER_RADIUS, player.x));
+           player.y = Math.max(PLAYER_RADIUS, Math.min(CANVAS_HEIGHT - PLAYER_RADIUS, player.y));
+           
+           let allFixed = true;
+           let hasHooligan = false;
+           let hasWorking = false;
+           
+           for (let i = 0; i < lamps.length; i++) {
+               const lamp = lamps[i];
+               lamp.update(dt);
+               
+               const dist = Math.hypot(player.x - lamp.x, player.y - lamp.y);
+               
+               if (lamp.state === 'broken' && dist < FIX_DISTANCE) {
+                   lamp.fixProgress += dt;
+                   if (lamp.fixProgress >= 0.5) {
+                       lamp.state = 'fixed';
+                       lamp.fixProgress = 0;
+                       score += 100;
+                       createParticles(lamp.x, lamp.y, '#00ff00', 8);
+                       
+                       const workingLamps = lamps.filter(l => l.state === 'working');
+                       if (workingLamps.length > 0 && nextBreakTimer <= 0) {
+                           nextBreakTimer = Math.random() * 2 + 1;
+                       }
+                   }
+               } else {
+                   lamp.fixProgress = Math.max(0, lamp.fixProgress - dt);
+               }
+               
+               if (lamp.state === 'working' || lamp.state === 'broken' || lamp.state === 'hooligan') {
+                   allFixed = false;
+               }
+               
+               if (lamp.state === 'hooligan') hasHooligan = true;
+               if (lamp.state === 'working') hasWorking = true;
+           }
+           
+           document.getElementById('hooliganWarning').style.display = hasHooligan ? 'block' : 'none';
+           
+           if (lamps.length > 0 && allFixed && !isRoundTransition) {
+               const fixedCount = lamps.filter(l => l.state === 'fixed').length;
+               if (fixedCount > 0) {
+                   nextRound();
+               }
+           }
+           
+           if (nextBreakTimer > 0 && hasWorking) {
+               nextBreakTimer -= dt;
+               if (nextBreakTimer <= 0) {
+                   breakRandomLamp();
+               }
+           }
+           
+           particles = particles.filter(p => {
+               p.update(dt);
+               return p.life > 0;
+           });
+           
+           updateUI();
+       }
+       
+       function draw() {
+           ctx.fillStyle = 'rgba(10, 10, 20, 0.3)';
+           ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+           
+           drawCityBackground();
+           
+           lamps.forEach(lamp => lamp.draw(ctx));
+           
+           drawPlayer();
+           
+           particles.forEach(p => p.draw(ctx));
+           
+           if (round === 0) {
+               drawTitleScreen();
+           }
+           
+           if (isRoundTransition) {
+               ctx.fillStyle = 'rgba(0,0,0,0.8)';
+               ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+               
+               ctx.font = 'bold 60px Orbitron';
+               ctx.textAlign = 'center';
+               ctx.fillStyle = '#00ff00';
+               ctx.shadowColor = '#00ff00';
+               ctx.shadowBlur = 20;
+               ctx.fillText(`РАУНД ${round} ПРОЙДЕН!`, CANVAS_WIDTH/2, CANVAS_HEIGHT/2);
+               
+               ctx.font = '30px Orbitron';
+               ctx.fillStyle = '#00ffff';
+               ctx.shadowBlur = 10;
+               ctx.fillText(`Следующий раунд: ${round + 1}`, CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 60);
+               ctx.shadowBlur = 0;
+           }
+           
+           if (autopilotEnabled && gameState === 'playing') {
+               drawAutopilotIndicator();
+           }
+       }
+       
+       function drawAutopilotIndicator() {
+           let target = null;
+           let minDist = Infinity;
+           
+           for (let lamp of lamps) {
+               if (lamp.state === 'hooligan' && lamp.hooligan) {
+                   const dist = Math.hypot(player.x - lamp.hooligan.x, player.y - lamp.hooligan.y);
+                   if (dist < minDist) {
+                       minDist = dist;
+                       target = { x: lamp.hooligan.x, y: lamp.hooligan.y, type: 'hooligan' };
+                   }
+               }
+           }
+           
+           if (!target) {
+               for (let lamp of lamps) {
+                   if (lamp.state === 'broken') {
+                       const dist = Math.hypot(player.x - lamp.x, player.y - lamp.y);
+                       if (dist < minDist) {
+                           minDist = dist;
+                           target = { x: lamp.x, y: lamp.y, type: 'broken' };
+                       }
+                   }
+               }
+           }
+           
+           if (target) {
+               ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+               ctx.lineWidth = 2;
+               ctx.setLineDash([10, 5]);
+               ctx.beginPath();
+               ctx.moveTo(player.x, player.y);
+               ctx.lineTo(target.x, target.y);
+               ctx.stroke();
+               ctx.setLineDash([]);
+               
+               ctx.strokeStyle = target.type === 'hooligan' ? '#ff0066' : '#00ff00';
+               ctx.lineWidth = 3;
+               ctx.beginPath();
+               ctx.arc(target.x, target.y, 20, 0, Math.PI * 2);
+               ctx.stroke();
+               
+               ctx.fillStyle = '#00ff00';
+               ctx.font = '16px Orbitron';
+               ctx.textAlign = 'center';
+               ctx.fillText('🎯', target.x, target.y - 25);
+           }
+       }
+       
+       function drawCityBackground() {
+           ctx.fillStyle = '#1a1a2e';
+           for (let i = 0; i < 12; i++) {
+               const h = 80 + Math.sin(i * 1.3) * 40;
+               const w = 110;
+               const x = i * 110 - 30;
+               ctx.fillRect(x, CANVAS_HEIGHT - h, w, h);
+               
+               ctx.fillStyle = '#2a2a3e';
+               for (let wy = CANVAS_HEIGHT - h + 20; wy < CANVAS_HEIGHT - 20; wy += 25) {
+                   for (let wx = x + 10; wx < x + w - 10; wx += 20) {
+                       if (Math.random() > 0.6) {
+                           ctx.fillRect(wx, wy, 12, 15);
+                       }
+                   }
+               }
+               ctx.fillStyle = '#1a1a2e';
+           }
+       }
+       
+       function drawPlayer() {
+           const gradient = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, 30);
+           gradient.addColorStop(0, autopilotEnabled ? '#00ff00' : player.color);
+           gradient.addColorStop(0.5, (autopilotEnabled ? '#00ff00' : player.color) + '40');
+           gradient.addColorStop(1, 'transparent');
+           ctx.fillStyle = gradient;
+           ctx.beginPath();
+           ctx.arc(player.x, player.y, 30, 0, Math.PI * 2);
+           ctx.fill();
+           
+           ctx.fillStyle = autopilotEnabled ? '#00ff00' : player.color;
+           ctx.beginPath();
+           ctx.arc(player.x, player.y, PLAYER_RADIUS, 0, Math.PI * 2);
+           ctx.fill();
+           
+           ctx.fillStyle = '#ffaa00';
+           ctx.beginPath();
+           ctx.arc(player.x, player.y - 5, PLAYER_RADIUS * 0.8, Math.PI, 0);
+           ctx.fill();
+           
+           ctx.save();
+           ctx.translate(player.x + 10, player.y + 5);
+           ctx.rotate(Math.sin(Date.now() / 200) * 0.3);
+           ctx.fillStyle = '#aaa';
+           ctx.fillRect(-3, -15, 6, 20);
+           ctx.fillRect(-8, -15, 16, 6);
+           ctx.restore();
+           
+           if (autopilotEnabled) {
+               ctx.fillStyle = '#00ff00';
+               ctx.font = '20px Arial';
+               ctx.textAlign = 'center';
+               ctx.fillText('🤖', player.x, player.y - 25);
+           }
+           
+           const nearBroken = lamps.find(l => {
+               const dist = Math.hypot(player.x - l.x, player.y - l.y);
+               return l.state === 'broken' && dist < FIX_DISTANCE;
+           });
+           
+           if (nearBroken) {
+               ctx.strokeStyle = '#00ff00';
+               ctx.lineWidth = 3;
+               ctx.setLineDash([5, 5]);
+               ctx.beginPath();
+               ctx.arc(player.x, player.y, FIX_DISTANCE, 0, Math.PI * 2);
+               ctx.stroke();
+               ctx.setLineDash([]);
+               
+               const progress = nearBroken.fixProgress / 0.5;
+               ctx.fillStyle = '#00ff00';
+               ctx.fillRect(player.x - 20, player.y - 30, 40 * progress, 5);
+               ctx.strokeStyle = '#fff';
+               ctx.lineWidth = 1;
+               ctx.strokeRect(player.x - 20, player.y - 30, 40, 5);
+           }
+       }
+       
+       function drawTitleScreen() {
+           ctx.fillStyle = 'rgba(0,0,0,0.7)';
+           ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+           
+           ctx.font = 'bold 80px Orbitron';
+           ctx.textAlign = 'center';
+           ctx.fillStyle = '#00ffff';
+           ctx.shadowColor = '#00ffff';
+           ctx.shadowBlur = 20;
+           ctx.fillText('CITY LIGHTS', CANVAS_WIDTH/2, CANVAS_HEIGHT/2 - 50);
+           ctx.shadowBlur = 0;
+           
+           ctx.font = '30px Orbitron';
+           ctx.fillStyle = '#aaa';
+           ctx.fillText('Нажмите ПРОБЕЛ или A на геймпаде', CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 50);
+           
+           const gamepad = gamepadIndex !== null ? navigator.getGamepads()[gamepadIndex] : null;
+           if (keys[' '] || (gamepad && gamepad.buttons[0]?.pressed)) {
+               startRound();
+           }
+       }
+       
+       function updateUI() {
+           document.getElementById('roundDisplay').textContent = round;
+           document.getElementById('scoreDisplay').textContent = score;
+           const fixedCount = lamps.filter(l => l.state === 'fixed').length;
+           const totalLamps = lamps.length;
+           document.getElementById('lampsDisplay').textContent = `${fixedCount}/${totalLamps}`;
+           
+           const brokenLamps = lamps.filter(l => l.state === 'broken');
+           if (brokenLamps.length > 0) {
+               const minTime = Math.min(...brokenLamps.map(l => l.timer));
+               document.getElementById('timeDisplay').textContent = `ВРЕМЯ: ${minTime.toFixed(1)}с`;
+               document.getElementById('timeDisplay').className = minTime < 2 ? 'warning' : '';
+           } else {
+               document.getElementById('timeDisplay').textContent = '';
+           }
+       }
+       
+       function startGame() {
+           document.getElementById('startScreen').style.display = 'none';
+           
+           if (debugStartRound > 0) {
+               round = debugStartRound - 1;
+           } else {
+               round = 0;
+           }
+           
+           score = 0;
+           player.x = CANVAS_WIDTH / 2;
+           player.y = CANVAS_HEIGHT / 2;
+           initRound();
+           gameState = 'playing';
+           lastTime = performance.now();
+           requestAnimationFrame(gameLoop);
+       }
+       
+       function startRound() {
+           round++;
+           initRound();
+           player.x = CANVAS_WIDTH / 2;
+           player.y = CANVAS_HEIGHT / 2;
+           
+           if (round > 1) {
+               score += round * 50;
+           }
+       }
+       
+       function nextRound() {
+           isRoundTransition = true;
+           roundTransitionTimer = 2;
+           nextBreakTimer = 0;
+       }
+       
+       function gameOver() {
+           gameState = 'gameover';
+           document.getElementById('finalRound').textContent = round;
+           document.getElementById('finalScore').textContent = score;
+           document.getElementById('gameOver').style.display = 'block';
+           autopilotEnabled = false;
+           document.getElementById('autopilotIndicator').style.display = 'none';
+           debugStartRound = 0;
+       }
+       
+       function restartGame() {
+           document.getElementById('gameOver').style.display = 'none';
+           round = 0;
+           score = 0;
+           lamps = [];
+           particles = [];
+           isRoundTransition = false;
+           autopilotEnabled = false;
+           debugStartRound = 0;
+           document.getElementById('autopilotIndicator').style.display = 'none';
+           startGame();
+       }
+       
+       function gameLoop(currentTime) {
+           const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
+           lastTime = currentTime;
+           
+           update(dt);
+           draw();
+           
+           requestAnimationFrame(gameLoop);
+       }
+       
+       // Initial draw
+       resizeCanvas();
+       draw();
+   </script>
+</body>
+</html>
