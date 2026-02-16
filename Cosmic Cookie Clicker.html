@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Cookie Clicker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: radial-gradient(circle at center, #2b1055, #000000);
+            color: white;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        h1, h2, h3, .font-display {
+            font-family: 'Fredoka One', cursive;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e94560; 
+            border-radius: 4px;
+        }
+
+        /* Cookie Animation */
+        #big-cookie {
+            transition: transform 0.1s;
+            filter: drop-shadow(0 0 20px rgba(255, 165, 0, 0.6));
+            cursor: pointer;
+        }
+        #big-cookie:active {
+            transform: scale(0.95);
+        }
+        #big-cookie:hover {
+            filter: drop-shadow(0 0 30px rgba(255, 200, 100, 0.8));
+        }
+
+        /* Floating Text Animation */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-50px) scale(1.2); }
+        }
+        .floating-text {
+            position: absolute;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            z-index: 50;
+        }
+
+        /* Particles */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            background: white;
+            border-radius: 50%;
+            animation: fadeOut 1s linear forwards;
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translate(var(--tx), var(--ty)); }
+        }
+
+        /* Shop Item Hover */
+        .shop-item {
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .shop-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(-5px);
+            border-color: rgba(255,255,255,0.3);
+        }
+        .shop-item.affordable {
+            border-left: 4px solid #4ade80;
+        }
+        .shop-item.locked {
+            opacity: 0.6;
+            filter: grayscale(0.8);
+        }
+
+        /* Shine effect for upgrades */
+        .shine {
+            position: relative;
+            overflow: hidden;
+        }
+        .shine::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+            transform: skewX(-25deg);
+            animation: shine 3s infinite;
+        }
+        @keyframes shine {
+            100% { left: 200%; }
+        }
+        
+        /* Background Stars */
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: twinkle var(--duration) ease-in-out infinite;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col md:flex-row overflow-hidden">
+
+    <!-- Background Stars Container -->
+    <div id="stars-container" class="absolute inset-0 pointer-events-none z-0"></div>
+
+    <!-- LEFT SECTION: Production & Stats -->
+    <div class="w-full md:w-1/3 p-6 flex flex-col justify-center items-center z-10 relative border-b md:border-b-0 md:border-r border-white/10 bg-black/20 backdrop-blur-sm">
+        
+        <div class="text-center mb-4">
+            <h2 class="text-gray-400 text-sm uppercase tracking-widest mb-1">Cookies Baked</h2>
+            <div id="cookie-count" class="text-5xl md:text-6xl font-display text-white drop-shadow-lg">0</div>
+            <div class="text-orange-400 mt-2 font-bold text-lg">
+                <span id="cps-display">0</span> per second
+            </div>
+        </div>
+
+        <!-- The Big Cookie -->
+        <div class="relative mt-4 group">
+            <div id="big-cookie" class="w-48 h-48 md:w-64 md:h-64 rounded-full bg-gradient-to-br from-yellow-300 via-yellow-600 to-yellow-800 shadow-2xl flex items-center justify-center relative overflow-hidden shine">
+                <!-- Cookie Texture (Simple CSS) -->
+                <div class="absolute inset-0 opacity-30" style="background-image: radial-gradient(circle at 20% 30%, #3e2723 5%, transparent 6%), radial-gradient(circle at 70% 60%, #3e2723 4%, transparent 5%), radial-gradient(circle at 40% 80%, #3e2723 6%, transparent 7%);"></div>
+                <div class="text-yellow-900/20 text-6xl font-black select-none">CC</div>
+            </div>
+            <div class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-white/50 text-sm animate-pulse">Click me!</div>
+        </div>
+
+        <!-- News Ticker -->
+        <div class="mt-12 w-full max-w-xs bg-black/40 p-3 rounded-lg border border-white/10">
+            <p id="news-ticker" class="text-xs text-gray-300 italic text-center">"Welcome to the Cookie Universe."</p>
+        </div>
+    </div>
+
+    <!-- RIGHT SECTION: Shop -->
+    <div class="w-full md:w-2/3 flex flex-col z-10 bg-black/40 backdrop-blur-md">
+        <div class="p-4 border-b border-white/10 bg-black/20 flex justify-between items-center">
+            <h2 class="text-2xl font-display text-yellow-400">Store</h2>
+            <div class="text-xs text-gray-400">Buy upgrades to bake automatically</div>
+        </div>
+        
+        <div id="shop-container" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <!-- Shop items will be injected here via JS -->
+        </div>
+    </div>
+
+    <script>
+        // --- Game Configuration & State ---
+        const gameState = {
+            cookies: 0,
+            totalCookies: 0,
+            clicks: 0,
+            startTime: Date.now(),
+            cps: 0, // Cookies per second
+            clickPower: 1,
+            buildings: [
+                { id: 'cursor', name: 'Cursor', baseCost: 15, baseCps: 0.1, count: 0, icon: '🖱️', desc: 'Autoclicks once every 10 seconds.' },
+                { id: 'grandma', name: 'Grandma', baseCost: 100, baseCps: 1, count: 0, icon: '👵', desc: 'A nice grandma to bake cookies.' },
+                { id: 'farm', name: 'Farm', baseCost: 1100, baseCps: 8, count: 0, icon: '🚜', desc: 'Grows cookie plants from cookie seeds.' },
+                { id: 'mine', name: 'Mine', baseCost: 12000, baseCps: 47, count: 0, icon: '⛏️', desc: 'Mines out cookie dough and chocolate chips.' },
+                { id: 'factory', name: 'Factory', baseCost: 130000, baseCps: 260, count: 0, icon: '🏭', desc: 'Produces large quantities of cookies.' },
+                { id: 'bank', name: 'Bank', baseCost: 1400000, baseCps: 1400, count: 0, icon: '🏦', desc: 'Generates cookies from interest.' },
+                { id: 'temple', name: 'Temple', baseCost: 20000000, baseCps: 7800, count: 0, icon: '🏛️', desc: 'Full of precious, ancient chocolate.' },
+                { id: 'wizard', name: 'Wizard Tower', baseCost: 330000000, baseCps: 44000, count: 0, icon: '🧙', desc: 'Summons cookies with magic spells.' }
+            ]
+        };
+
+        // --- DOM Elements ---
+        const elCookieCount = document.getElementById('cookie-count');
+        const elCpsDisplay = document.getElementById('cps-display');
+        const elBigCookie = document.getElementById('big-cookie');
+        const elShopContainer = document.getElementById('shop-container');
+        const elNewsTicker = document.getElementById('news-ticker');
+
+        // --- Audio Context (Simple Synth) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'click') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'buy') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            }
+        }
+
+        // --- Core Logic ---
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + ' million';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return Math.floor(num).toString();
+        }
+
+        function calculateCps() {
+            let cps = 0;
+            gameState.buildings.forEach(b => {
+                cps += b.count * b.baseCps;
+            });
+            gameState.cps = cps;
+            return cps;
+        }
+
+        function getBuildingCost(building) {
+            // Cost = BaseCost * 1.15^Count
+            return Math.floor(building.baseCost * Math.pow(1.15, building.count));
+        }
+
+        function updateDisplay() {
+            elCookieCount.innerText = formatNumber(gameState.cookies);
+            elCpsDisplay.innerText = formatNumber(gameState.cps);
+            
+            // Update Shop UI
+            gameState.buildings.forEach((b, index) => {
+                const cost = getBuildingCost(b);
+                const el = document.getElementById(`item-${b.id}`);
+                
+                if (el) {
+                    const costEl = el.querySelector('.item-cost');
+                    costEl.innerText = formatNumber(cost) + ' cookies';
+                    
+                    if (gameState.cookies >= cost) {
+                        el.classList.remove('locked', 'opacity-60');
+                        el.classList.add('affordable', 'cursor-pointer');
+                        el.style.filter = 'none';
+                    } else {
+                        el.classList.add('locked');
+                        el.classList.remove('affordable', 'cursor-pointer');
+                    }
+                }
+            });
+        }
+
+        function createFloatingText(x, y, text, color = '#fff') {
+            const el = document.createElement('div');
+            el.className = 'floating-text text-2xl';
+            el.innerText = text;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.color = color;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1000);
+        }
+
+        function createParticles(x, y) {
+            for (let i = 0; i < 5; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const size = Math.random() * 6 + 2;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.left = x + 'px';
+                p.style.top = y + 'px';
+                // Random direction
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = Math.random() * 50 + 20;
+                const tx = Math.cos(angle) * velocity;
+                const ty = Math.sin(angle) * velocity;
+                p.style.setProperty('--tx', `${tx}px`);
+                p.style.setProperty('--ty', `${ty}px`);
+                
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 1000);
+            }
+        }
+
+        function clickCookie(e) {
+            gameState.cookies += gameState.clickPower;
+            gameState.totalCookies += gameState.clickPower;
+            gameState.clicks++;
+            
+            playSound('click');
+            
+            // Visuals
+            const rect = elBigCookie.getBoundingClientRect();
+            // If triggered by auto-clicker, center it, else use mouse
+            let x, y;
+            if (e.clientX) {
+                x = e.clientX;
+                y = e.clientY;
+            } else {
+                x = rect.left + rect.width / 2;
+                y = rect.top + rect.height / 2;
+            }
+
+            createFloatingText(x, y, `+${gameState.clickPower}`, '#fbbf24');
+            createParticles(x, y);
+            
+            // Slight shake effect on container
+            elBigCookie.style.transform = `scale(0.95) rotate(${Math.random() * 6 - 3}deg)`;
+            setTimeout(() => elBigCookie.style.transform = '', 100);
+
+            updateDisplay();
+        }
+
+        function buyBuilding(index) {
+            const b = gameState.buildings[index];
+            const cost = getBuildingCost(b);
+
+            if (gameState.cookies >= cost) {
+                gameState.cookies -= cost;
+                b.count++;
+                playSound('buy');
+                calculateCps();
+                updateDisplay();
+                
+                // Visual feedback in shop
+                const el = document.getElementById(`item-${b.id}`);
+                el.classList.add('bg-white/20');
+                setTimeout(() => el.classList.remove('bg-white/20'), 100);
+            }
+        }
+
+        function initShop() {
+            elShopContainer.innerHTML = '';
+            gameState.buildings.forEach((b, index) => {
+                const item = document.createElement('div');
+                item.id = `item-${b.id}`;
+                item.className = 'shop-item w-full bg-white/5 p-3 rounded flex items-center justify-between select-none locked';
+                item.onclick = () => buyBuilding(index);
+                
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="text-3xl">${b.icon}</div>
+                        <div>
+                            <div class="font-bold text-lg leading-tight">${b.name}</div>
+                            <div class="text-xs text-gray-400 item-desc">${b.desc}</div>
+                            <div class="text-yellow-400 text-sm font-bold mt-1 item-cost">15 cookies</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-display text-white/50 count-display">0</div>
+                    </div>
+                `;
+                elShopContainer.appendChild(item);
+            });
+        }
+
+        // --- Background Stars ---
+        function initStars() {
+            const container = document.getElementById('stars-container');
+            for(let i=0; i<50; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.width = Math.random() * 3 + 'px';
+                star.style.height = star.style.width;
+                star.style.setProperty('--duration', (Math.random() * 3 + 2) + 's');
+                container.appendChild(star);
+            }
+        }
+
+        // --- News Ticker ---
+        const newsMessages = [
+            "You feel like making cookies. But nobody wants to eat your cookies.",
+            "Your cookies are popular with the local rats.",
+            "The neighborhood raccoon is eyeing your cookie stash.",
+            "News: Cookies found to be delicious.",
+            "News: Local man bakes cookies; world doesn't care.",
+            "Scientists discover cookies are just bread with extra sugar.",
+            "Grandma approves of your cookie-making skills.",
+            "The cookie economy is booming!",
+            "You dream of cookies. Literal cookies. You are obsessed.",
+            "Rumors of a cookie monster in the area are unfounded."
+        ];
+
+        function updateNews() {
+            const msg = newsMessages[Math.floor(Math.random() * newsMessages.length)];
+            elNewsTicker.style.opacity = 0;
+            setTimeout(() => {
+                elNewsTicker.innerText = `"${msg}"`;
+                elNewsTicker.style.opacity = 1;
+            }, 500);
+        }
+
+        // --- Game Loop ---
+        let lastTime = Date.now();
+        let autoClickTimer = 0;
+
+        function gameLoop() {
+            const now = Date.now();
+            const dt = (now - lastTime) / 1000; // Delta time in seconds
+            lastTime = now;
+
+            // Passive Income
+            if (gameState.cps > 0) {
+                const gain = gameState.cps * dt;
+                gameState.cookies += gain;
+                gameState.totalCookies += gain;
+            }
+
+            // Cursor Auto-click logic (simplified as part of CPS, but let's add visual clicks)
+            // We treat Cursor CPS as 0.1. 10 cursors = 1 click per second.
+            // For visual flair, we'll just rely on the CPS counter for the math, 
+            // but maybe add a visual "click" on the big cookie if cursors are high enough?
+            // Actually, standard Cookie Clicker treats Cursor CPS as passive. 
+            // The prompt asks for "Auto Clicker". Let's make the Cursor upgrade specifically trigger visual clicks.
+            
+            const cursorCount = gameState.buildings[0].count;
+            if (cursorCount > 0) {
+                autoClickTimer += dt;
+                const clickInterval = 10 / cursorCount; // 1 click every 10 seconds per cursor
+                if (autoClickTimer >= clickInterval) {
+                    autoClickTimer = 0;
+                    // Trigger a "ghost" click
+                    clickCookie({}); // Pass empty event to trigger logic centered
+                }
+            }
+
+            // Update Shop Counts in DOM
+            gameState.buildings.forEach(b => {
+                const countEl = document.querySelector(`#item-${b.id} .count-display`);
+                if (countEl) countEl.innerText = b.count;
+            });
+
+            updateDisplay();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Initialization ---
+        elBigCookie.addEventListener('mousedown', clickCookie);
+        
+        // Initialize
+        initStars();
+        initShop();
+        calculateCps();
+        updateDisplay();
+        requestAnimationFrame(gameLoop);
+        setInterval(updateNews, 10000); // Change news every 10s
+
+    </script>
+</body>
+</html>
