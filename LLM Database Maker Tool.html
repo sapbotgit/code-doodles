@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Database Maker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1; 
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8; 
+        }
+
+        /* Chat Bubble Styles */
+        .message-bubble {
+            max-width: 70%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            position: relative;
+            font-size: 0.95rem;
+            line-height: 1.4;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            transition: all 0.2s;
+            white-space: pre-wrap; /* CRITICAL: Preserves newlines and spaces */
+        }
+        
+        .message-row:hover .message-actions {
+            opacity: 1;
+        }
+
+        /* WhatsApp-like tails */
+        .msg-user {
+            background-color: #dcf8c6; /* Light Green */
+            border-top-right-radius: 0;
+            margin-left: auto;
+        }
+        .msg-assistant {
+            background-color: #ffffff; /* White */
+            border-top-left-radius: 0;
+            border: 1px solid #f0f0f0;
+            margin-right: auto;
+        }
+
+        /* System Message */
+        .msg-system {
+            background-color: #e3f2fd;
+            max-width: 90%;
+            margin: 0 auto;
+            font-size: 0.85rem;
+            color: #555;
+            text-align: center;
+            border-radius: 8px;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        /* Hide file input */
+        input[type="file"] {
+            display: none;
+        }
+
+        /* Editable content focus */
+        [contenteditable]:focus {
+            outline: 2px solid #3b82f6;
+            background-color: #fff;
+            padding: 2px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-[#e5ddd5] h-screen w-screen overflow-hidden font-sans text-gray-800 flex flex-col">
+
+    <!-- Top Navigation / Header -->
+    <header class="bg-[#128c7e] text-white h-16 flex items-center justify-between px-6 shadow-md z-20 shrink-0">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-database text-xl"></i>
+            <h1 class="font-semibold text-lg tracking-wide">LLM Database Maker</h1>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="app.exportJSONL()" class="bg-[#075e54] hover:bg-[#054c44] text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm">
+                <i class="fa-solid fa-download"></i> Export JSONL
+            </button>
+            <label class="bg-[#075e54] hover:bg-[#054c44] text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm cursor-pointer">
+                <i class="fa-solid fa-upload"></i> Import JSONL
+                <input type="file" id="fileInput" accept=".jsonl,.json,.txt" onchange="app.importJSONL(this)">
+            </label>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- LEFT SIDEBAR: Conversation List -->
+        <aside class="w-1/3 min-w-[300px] max-w-[400px] bg-white border-r border-gray-300 flex flex-col z-10 shadow-lg">
+            <!-- Sidebar Header -->
+            <div class="p-4 bg-[#f0f2f5] border-b border-gray-300 flex justify-between items-center">
+                <span class="font-semibold text-gray-600">Conversations</span>
+                <button onclick="app.addConversation()" class="text-[#128c7e] hover:bg-gray-200 p-2 rounded-full transition" title="New Conversation">
+                    <i class="fa-solid fa-plus text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Search/Filter -->
+            <div class="p-2 bg-[#f0f2f5]">
+                <div class="bg-white rounded-lg flex items-center px-3 py-2 shadow-sm">
+                    <i class="fa-solid fa-search text-gray-400 text-sm mr-2"></i>
+                    <input type="text" id="searchConv" placeholder="Search conversations..." class="w-full outline-none text-sm text-gray-700 bg-transparent" oninput="app.renderSidebar()">
+                </div>
+            </div>
+
+            <!-- List Container -->
+            <div id="conversationList" class="flex-1 overflow-y-auto bg-white">
+                <!-- Items injected via JS -->
+            </div>
+            
+            <!-- Stats Footer -->
+            <div class="p-2 bg-[#f0f2f5] text-xs text-gray-500 text-center border-t border-gray-300">
+                <span id="totalStats">0 Conversations</span>
+            </div>
+        </aside>
+
+        <!-- RIGHT PANEL: Chat Interface -->
+        <main class="flex-1 flex flex-col bg-[#e5ddd5] relative">
+            
+            <!-- Chat Header -->
+            <div class="h-16 bg-[#f0f2f5] border-b border-gray-300 flex items-center justify-between px-6 shadow-sm z-10 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-semibold text-gray-800" id="activeConvTitle">Select a Conversation</h2>
+                        <p class="text-xs text-gray-500" id="activeConvMeta">--</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="app.toggleSystemPrompt()" class="text-gray-500 hover:text-[#128c7e] p-2 transition" title="Edit System Prompt">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                    <button onclick="app.deleteActiveConversation()" class="text-gray-500 hover:text-red-600 p-2 transition" title="Delete Conversation">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- System Prompt Editor (Hidden by default) -->
+            <div id="systemPromptEditor" class="hidden bg-blue-50 border-b border-blue-200 p-3 flex flex-col gap-2 animate-slide-in">
+                <div class="flex justify-between items-center">
+                    <label class="text-xs font-bold text-blue-800 uppercase">System Prompt (Context)</label>
+                    <button onclick="app.toggleSystemPrompt()" class="text-blue-600 text-xs hover:underline">Close</button>
+                </div>
+                <textarea id="systemInput" class="w-full p-2 text-sm border border-blue-200 rounded focus:outline-none focus:border-blue-500 bg-white" rows="2" placeholder="e.g., You are a helpful assistant..."></textarea>
+                <button onclick="app.saveSystemPrompt()" class="self-end bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700">Set Context</button>
+            </div>
+
+            <!-- Messages Area -->
+            <div id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-4 relative">
+                <!-- Empty State -->
+                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
+                    <i class="fa-solid fa-comments text-6xl mb-4 opacity-20"></i>
+                    <p>Select or create a conversation to start editing</p>
+                </div>
+                <!-- Messages injected here -->
+            </div>
+
+            <!-- Input Area -->
+            <div class="bg-[#f0f2f5] p-3 border-t border-gray-300 shrink-0">
+                <div class="flex flex-col gap-2 max-w-4xl mx-auto">
+                    
+                    <!-- Role Selector -->
+                    <div class="flex justify-center gap-4 mb-1">
+                        <label class="flex items-center gap-2 cursor-pointer group">
+                            <input type="radio" name="role" value="user" checked class="accent-[#128c7e]">
+                            <span class="text-sm font-medium text-gray-700 group-hover:text-[#128c7e]">User</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer group">
+                            <input type="radio" name="role" value="assistant" class="accent-[#128c7e]">
+                            <span class="text-sm font-medium text-gray-700 group-hover:text-[#128c7e]">Assistant (AI)</span>
+                        </label>
+                    </div>
+
+                    <!-- Text Input -->
+                    <div class="flex items-end bg-white rounded-lg shadow-sm border border-gray-300 focus-within:border-[#128c7e] transition-colors">
+                        <textarea id="messageInput" rows="1" class="w-full p-3 outline-none resize-none bg-transparent text-gray-700 max-h-32" placeholder="Type a message..." onkeydown="app.handleKeyDown(event)"></textarea>
+                        <button onclick="app.addMessage()" class="p-3 text-[#128c7e] hover:bg-gray-100 rounded-r-lg transition">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const app = {
+            data: [], // Array of conversations - EMPTY BY DEFAULT NOW
+            activeId: null,
+            
+            init() {
+                // No sample data added by default
+                this.renderSidebar();
+                
+                // Auto-resize textarea
+                const textarea = document.getElementById('messageInput');
+                textarea.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                    if(this.value === '') this.style.height = 'auto';
+                });
+            },
+
+            // --- Data Management ---
+
+            generateId() {
+                return Date.now().toString(36) + Math.random().toString(36).substr(2);
+            },
+
+            addConversation(title = null, messages = []) {
+                const id = this.generateId();
+                const newConv = {
+                    id: id,
+                    title: title || `Conversation ${this.data.length + 1}`,
+                    timestamp: new Date(),
+                    systemPrompt: "",
+                    messages: messages
+                };
+                this.data.unshift(newConv); // Add to top
+                this.activeId = id;
+                this.renderSidebar();
+                this.renderChat();
+            },
+
+            deleteActiveConversation() {
+                if (!this.activeId) return;
+                if(confirm("Delete this conversation permanently?")) {
+                    this.data = this.data.filter(c => c.id !== this.activeId);
+                    this.activeId = null;
+                    this.renderSidebar();
+                    this.renderChat();
+                }
+            },
+
+            getActiveConversation() {
+                return this.data.find(c => c.id === this.activeId);
+            },
+
+            // --- UI Rendering ---
+
+            renderSidebar() {
+                const list = document.getElementById('conversationList');
+                const search = document.getElementById('searchConv').value.toLowerCase();
+                list.innerHTML = '';
+
+                let filtered = this.data.filter(c => c.title.toLowerCase().includes(search));
+
+                filtered.forEach(conv => {
+                    const isActive = conv.id === this.activeId;
+                    const lastMsg = conv.messages.length > 0 ? conv.messages[conv.messages.length - 1].content : "No messages";
+                    // Handle multiline preview in sidebar
+                    const singleLine = lastMsg.replace(/\n/g, ' ');
+                    const truncated = singleLine.length > 40 ? singleLine.substring(0, 40) + '...' : singleLine;
+                    
+                    const div = document.createElement('div');
+                    div.className = `p-3 border-b border-gray-100 cursor-pointer hover:bg-[#f5f6f6] transition flex flex-col gap-1 ${isActive ? 'bg-[#e9edef] border-l-4 border-l-[#128c7e]' : ''}`;
+                    div.onclick = () => {
+                        this.activeId = conv.id;
+                        this.renderSidebar();
+                        this.renderChat();
+                    };
+
+                    div.innerHTML = `
+                        <div class="flex justify-between items-baseline">
+                            <h3 class="font-medium text-gray-800 text-sm">${conv.title}</h3>
+                            <span class="text-[10px] text-gray-400">${new Date(conv.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 truncate">${truncated}</p>
+                        <div class="flex gap-1 mt-1">
+                            <span class="text-[10px] bg-gray-200 text-gray-600 px-1 rounded">${conv.messages.length} msgs</span>
+                            ${conv.systemPrompt ? '<span class="text-[10px] bg-blue-100 text-blue-600 px-1 rounded">SYS</span>' : ''}
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+
+                document.getElementById('totalStats').innerText = `${this.data.length} Conversations`;
+            },
+
+            renderChat() {
+                const container = document.getElementById('chatContainer');
+                const emptyState = document.getElementById('emptyState');
+                const conv = this.getActiveConversation();
+
+                // Update Header
+                if (conv) {
+                    document.getElementById('activeConvTitle').innerText = conv.title;
+                    document.getElementById('activeConvMeta').innerText = `${conv.messages.length} messages`;
+                    document.getElementById('systemInput').value = conv.systemPrompt || "";
+                    emptyState.style.display = 'none';
+                } else {
+                    document.getElementById('activeConvTitle').innerText = "Select a Conversation";
+                    document.getElementById('activeConvMeta').innerText = "--";
+                    emptyState.style.display = 'flex';
+                    container.innerHTML = '';
+                    container.appendChild(emptyState);
+                    return;
+                }
+
+                // Clear and Rebuild Messages
+                container.innerHTML = '';
+                container.appendChild(emptyState); // Keep it in DOM but hidden
+
+                // Render System Prompt if exists (Visual indicator only)
+                if (conv.systemPrompt) {
+                    const sysDiv = document.createElement('div');
+                    sysDiv.className = "flex justify-center mb-4";
+                    sysDiv.innerHTML = `
+                        <div class="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full border border-blue-200 flex items-center gap-2">
+                            <i class="fa-solid fa-info-circle"></i> System Context Set
+                        </div>
+                    `;
+                    container.appendChild(sysDiv);
+                }
+
+                conv.messages.forEach((msg, index) => {
+                    const isUser = msg.role === 'user';
+                    const row = document.createElement('div');
+                    row.className = `flex w-full message-row group ${isUser ? 'justify-end' : 'justify-start'} animate-slide-in`;
+                    
+                    // Actions (Edit/Delete) - visible on hover
+                    const actions = `
+                        <div class="message-actions opacity-0 transition-opacity flex gap-2 mx-2 items-center text-gray-400 text-xs">
+                            <button onclick="app.editMessage(${index})" class="hover:text-blue-500" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="app.deleteMessage(${index})" class="hover:text-red-500" title="Delete"><i class="fa-solid fa-times"></i></button>
+                        </div>
+                    `;
+
+                    const bubble = document.createElement('div');
+                    bubble.className = `message-bubble relative ${isUser ? 'msg-user' : 'msg-assistant'}`;
+                    
+                    // Contenteditable for inline editing
+                    // NOTE: Using textContent to preserve newlines correctly in the editable div
+                    bubble.innerHTML = `
+                        <div class="text-xs font-bold mb-1 opacity-50 uppercase tracking-wider">${msg.role}</div>
+                        <div contenteditable="true" onblur="app.updateMessage(${index}, this.innerText)" class="outline-none whitespace-pre-wrap">${msg.content}</div>
+                    `;
+
+                    if (isUser) {
+                        row.innerHTML = actions;
+                        row.appendChild(bubble);
+                    } else {
+                        row.appendChild(bubble);
+                        row.innerHTML += actions;
+                    }
+
+                    container.appendChild(row);
+                });
+
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            },
+
+            // --- Actions ---
+
+            handleKeyDown(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.addMessage();
+                }
+            },
+
+            addMessage() {
+                const input = document.getElementById('messageInput');
+                const text = input.value; // Don't trim here to preserve leading newlines if user wants them (though usually not desired)
+                if (!text.trim() || !this.activeId) return; // Check trim only for validation
+
+                const role = document.querySelector('input[name="role"]:checked').value;
+                const conv = this.getActiveConversation();
+                
+                conv.messages.push({
+                    role: role,
+                    content: text // Store raw text with newlines
+                });
+
+                // Update timestamp
+                conv.timestamp = new Date();
+
+                input.value = '';
+                input.style.height = 'auto';
+                
+                this.renderChat();
+                this.renderSidebar(); // Update preview
+            },
+
+            updateMessage(index, newText) {
+                const conv = this.getActiveConversation();
+                if (conv) {
+                    conv.messages[index].content = newText; // Preserve whitespace from contenteditable
+                    this.renderSidebar(); // Update preview if it was the last msg
+                }
+            },
+
+            deleteMessage(index) {
+                const conv = this.getActiveConversation();
+                if (conv) {
+                    conv.messages.splice(index, 1);
+                    this.renderChat();
+                    this.renderSidebar();
+                }
+            },
+            
+            editMessage(index) {
+                // Focus is handled by contenteditable, this is just a trigger if needed
+                // But we can use this to maybe scroll to it or highlight
+            },
+
+            toggleSystemPrompt() {
+                const editor = document.getElementById('systemPromptEditor');
+                editor.classList.toggle('hidden');
+            },
+
+            saveSystemPrompt() {
+                const conv = this.getActiveConversation();
+                if (conv) {
+                    conv.systemPrompt = document.getElementById('systemInput').value.trim();
+                    this.renderChat();
+                    this.renderSidebar();
+                    this.toggleSystemPrompt();
+                }
+            },
+
+            // --- Import / Export ---
+
+            exportJSONL() {
+                if (this.data.length === 0) {
+                    alert("No data to export!");
+                    return;
+                }
+
+                let output = "";
+                
+                this.data.forEach(conv => {
+                    const messages = [];
+                    
+                    // Add system prompt if exists as first message
+                    if (conv.systemPrompt) {
+                        messages.push({ role: "system", content: conv.systemPrompt });
+                    }
+                    
+                    // Add rest
+                    messages.push(...conv.messages);
+
+                    // Convert to JSON string
+                    const line = JSON.stringify(messages);
+                    output += line + "\n";
+                });
+
+                const blob = new Blob([output], { type: "application/jsonl" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `llm_dataset_${new Date().toISOString().slice(0,10)}.jsonl`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            },
+
+            importJSONL(input) {
+                const file = input.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const text = e.target.result;
+                        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+                        
+                        let importCount = 0;
+
+                        lines.forEach(line => {
+                            try {
+                                const messages = JSON.parse(line);
+                                if (Array.isArray(messages) && messages.length > 0) {
+                                    // Extract system prompt if present
+                                    let systemPrompt = "";
+                                    let chatMessages = [];
+                                    
+                                    messages.forEach(m => {
+                                        if (m.role === 'system') {
+                                            systemPrompt = m.content;
+                                        } else {
+                                            chatMessages.push(m);
+                                        }
+                                    });
+
+                                    // Create new conversation
+                                    const id = this.generateId();
+                                    this.data.unshift({
+                                        id: id,
+                                        title: `Imported ${new Date().toLocaleTimeString()}`,
+                                        timestamp: new Date(),
+                                        systemPrompt: systemPrompt,
+                                        messages: chatMessages
+                                    });
+                                    importCount++;
+                                }
+                            } catch (err) {
+                                console.warn("Skipping invalid line:", line);
+                            }
+                        });
+
+                        if (importCount > 0) {
+                            this.activeId = this.data[0].id; // Select first imported
+                            this.renderSidebar();
+                            this.renderChat();
+                            alert(`Successfully imported ${importCount} conversations!`);
+                        } else {
+                            alert("No valid conversations found in file.");
+                        }
+
+                    } catch (err) {
+                        alert("Error reading file: " + err.message);
+                    }
+                    // Reset input
+                    input.value = '';
+                };
+                reader.readAsText(file);
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+    </script>
+</body>
+</html>
