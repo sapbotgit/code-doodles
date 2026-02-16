@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>String Escape Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border: 1px solid #ccc;
+            white-space: pre-wrap; /* Preserve whitespace */
+        }
+    </style>
+</head>
+<body>
+    <h1>String Escape Tool</h1>
+    <textarea id="inputString" placeholder="Enter your multi-line string or code here..."></textarea>
+    <button onclick="escapeString()">Escape String</button>
+    <h2>Escaped Output:</h2>
+    <pre id="outputString"></pre>
+
+    <script>
+        function escapeString() {
+            const input = document.getElementById('inputString').value;
+            const escapedString = input
+                .replace(/\\/g, '\\\\') // Escape backslashes
+                .replace(/'/g, "\\'")   // Escape single quotes
+                .replace(/"/g, '\\"')   // Escape double quotes
+                .replace(/\n/g, '\\n')   // Escape new lines
+                .replace(/\r/g, '\\r')   // Escape carriage returns
+                .replace(/\t/g, '\\t');   // Escape tabs
+            
+            document.getElementById('outputString').textContent = escapedString;
+        }
+    </script>
+</body>
+</html>
