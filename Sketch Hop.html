@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sketch Hop</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #f0f0f0;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        
+        canvas {
+            display: block;
+            background: #fff;
+            background-image: 
+                linear-gradient(#e0e0e0 1px, transparent 1px),
+                linear-gradient(90deg, #e0e0e0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            text-shadow: 2px 2px 0 #fff;
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            background: rgba(255,255,255,0.95);
+            padding: 30px;
+            border-radius: 20px;
+            border: 3px solid #333;
+            box-shadow: 5px 5px 0 #333;
+        }
+        
+        #gameOver h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: #ff6b6b;
+        }
+        
+        #gameOver p {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        
+        button {
+            margin-top: 15px;
+            padding: 15px 30px;
+            font-size: 20px;
+            font-family: inherit;
+            font-weight: bold;
+            background: #4ecdc4;
+            border: 3px solid #333;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 3px 3px 0 #333;
+            transition: transform 0.1s;
+        }
+        
+        button:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0 #333;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            pointer-events: none;
+        }
+        
+        @media (max-width: 600px) {
+            #ui { font-size: 16px; }
+            #gameOver h1 { font-size: 28px; }
+            #gameOver p { font-size: 18px; }
+            button { font-size: 16px; padding: 12px 24px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div id="ui">
+            <span id="score">0</span>
+            <span id="highScore">High: 0</span>
+        </div>
+        <div id="gameOver">
+            <h1>Game Over!</h1>
+            <p id="finalScore">Score: 0</p>
+            <button onclick="game.restart()">Hop Again!</button>
+        </div>
+        <div id="instructions">← → Arrow keys or tilt to move • Tap/Click to shoot</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            const maxWidth = Math.min(window.innerWidth - 20, 400);
+            const maxHeight = Math.min(window.innerHeight - 20, 600);
+            canvas.style.width = maxWidth + 'px';
+            canvas.style.height = maxHeight + 'px';
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        class SketchHop {
+            constructor() {
+                this.width = 400;
+                this.height = 600;
+                this.reset();
+                this.setupControls();
+                this.loop();
+            }
+            
+            reset() {
+                this.player = {
+                    x: 200,
+                    y: 400,
+                    vx: 0,
+                    vy: 0,
+                    width: 30,
+                    height: 40,
+                    facingRight: true,
+                    jetpack: 0,
+                    propeller: 0
+                };
+                
+                this.platforms = [];
+                this.monsters = [];
+                this.projectiles = [];
+                this.particles = [];
+                
+                this.score = 0;
+                this.highScore = localStorage.getItem('sketchHopHighScore') || 0;
+                this.camera = 0;
+                this.gameOver = false;
+                this.lastPlatformX = 200;
+                
+                // Starting platform directly under player
+                this.platforms.push({
+                    x: 170,
+                    y: 440,
+                    width: 60,
+                    height: 15,
+                    type: 'normal',
+                    broken: false,
+                    dx: 0,
+                    springOffset: 0
+                });
+                
+                // Generate initial platforms
+                let currentY = 440;
+                for (let i = 0; i < 15; i++) {
+                    currentY = this.addPlatformAbove(currentY, i);
+                }
+                
+                this.updateUI();
+            }
+            
+            addPlatformAbove(lastY, index) {
+                const heightProgress = Math.abs(this.camera) / 1000;
+                
+                // Vertical gap: 90-120px
+                const minGap = 90;
+                const maxGap = 120;
+                const newY = lastY - (minGap + Math.random() * (maxGap - minGap));
+                
+                // Horizontal reach: max 100px from last platform
+                const maxReach = 100;
+                let minX = Math.max(20, this.lastPlatformX - maxReach);
+                let maxX = Math.min(this.width - 80, this.lastPlatformX + maxReach);
+                
+                if (maxX - minX < 40) {
+                    if (this.lastPlatformX < this.width / 2) {
+                        maxX = Math.min(this.width - 80, this.lastPlatformX + maxReach);
+                        minX = Math.max(20, maxX - 100);
+                    } else {
+                        minX = Math.max(20, this.lastPlatformX - maxReach);
+                        maxX = Math.min(this.width - 80, minX + 100);
+                    }
+                }
+                
+                const newX = minX + Math.random() * (maxX - minX);
+                this.lastPlatformX = newX;
+                
+                // Platform types based on height
+                let type = 'normal';
+                const rand = Math.random();
+                if (heightProgress > 0.3 && rand > 0.7) type = 'moving';
+                else if (heightProgress > 0.5 && rand > 0.8) type = 'breakable';
+                else if (heightProgress > 0.8 && rand > 0.85) type = 'spring';
+                
+                this.platforms.push({
+                    x: newX,
+                    y: newY,
+                    width: 60,
+                    height: 15,
+                    type: type,
+                    broken: false,
+                    dx: type === 'moving' ? (Math.random() > 0.5 ? 2 : -2) : 0,
+                    springOffset: type === 'spring' ? Math.random() * 40 + 10 : 0
+                });
+                
+                // Spawn monster occasionally (not on first few platforms)
+                if (index > 3 && Math.random() > 0.7) {
+                    this.spawnMonster(newY);
+                }
+                
+                return newY;
+            }
+            
+            spawnMonster(y) {
+                const heightProgress = Math.abs(this.camera) / 1000;
+                const canSpawnUFO = heightProgress > 1.0;
+                const ufoChance = canSpawnUFO ? 0.05 : 0;
+                
+                const baseMonsterChance = 0.25 + (heightProgress * 0.1);
+                const monsterChance = Math.min(baseMonsterChance, 0.4);
+                
+                if (Math.random() < monsterChance) {
+                    const isUFO = Math.random() < ufoChance;
+                    
+                    this.monsters.push({
+                        x: Math.random() * (this.width - 40) + 20,
+                        y: y,
+                        width: 30,
+                        height: 30,
+                        vx: (Math.random() - 0.5) * (1.5 + heightProgress * 0.5),
+                        type: isUFO ? 'ufo' : 'normal',
+                        hp: 1
+                    });
+                }
+            }
+            
+            setupControls() {
+                this.keys = {};
+                
+                window.addEventListener('keydown', (e) => {
+                    this.keys[e.key] = true;
+                    if (e.key === ' ' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        this.shoot();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    this.keys[e.key] = false;
+                });
+                
+                let touchStartX = 0;
+                canvas.addEventListener('touchstart', (e) => {
+                    touchStartX = e.touches[0].clientX;
+                    this.shoot();
+                });
+                
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const diff = touch.clientX - touchStartX;
+                    this.player.vx = diff * 0.1;
+                    this.player.facingRight = diff > 0;
+                });
+                
+                canvas.addEventListener('touchend', () => {
+                    this.player.vx = 0;
+                });
+                
+                canvas.addEventListener('mousedown', () => this.shoot());
+            }
+            
+            shoot() {
+                if (this.gameOver || this.player.jetpack > 0 || this.player.propeller > 0) return;
+                
+                this.projectiles.push({
+                    x: this.player.x + (this.player.facingRight ? 20 : -20),
+                    y: this.player.y - 10,
+                    vx: this.player.facingRight ? 8 : -8,
+                    vy: -2,
+                    life: 60
+                });
+            }
+            
+            update() {
+                if (this.gameOver) return;
+                
+                // Player movement
+                if (this.keys['ArrowLeft'] || this.keys['a']) {
+                    this.player.vx = -5;
+                    this.player.facingRight = false;
+                } else if (this.keys['ArrowRight'] || this.keys['d']) {
+                    this.player.vx = 5;
+                    this.player.facingRight = true;
+                } else if (!this.keys['touch']) {
+                    this.player.vx *= 0.8;
+                }
+                
+                // Screen wrap
+                if (this.player.x < -20) this.player.x = this.width + 20;
+                if (this.player.x > this.width + 20) this.player.x = -20;
+                
+                // Powerups
+                if (this.player.jetpack > 0) {
+                    this.player.jetpack--;
+                    this.player.vy = -8;
+                    this.addParticles(this.player.x, this.player.y + 20, 'fire');
+                } else if (this.player.propeller > 0) {
+                    this.player.propeller--;
+                    this.player.vy = -4;
+                } else {
+                    this.player.vy += 0.4;
+                }
+                
+                this.player.x += this.player.vx;
+                this.player.y += this.player.vy;
+                
+                // Camera follow
+                if (this.player.y < 300 + this.camera) {
+                    const diff = (300 + this.camera) - this.player.y;
+                    this.camera -= diff;
+                    this.score += Math.floor(diff / 10);
+                    
+                    // Spawn new platforms AHEAD
+                    this.spawnPlatformsAhead();
+                }
+                
+                // Check death
+                if (this.player.y > this.height + this.camera + 100) {
+                    this.endGame();
+                }
+                
+                // Platform collisions
+                this.platforms.forEach((plat, i) => {
+                    if (plat.type === 'moving') {
+                        plat.x += plat.dx;
+                        if (plat.x <= 0 || plat.x >= this.width - plat.width) plat.dx *= -1;
+                    }
+                    
+                    if (plat.broken) return;
+                    
+                    if (this.player.vy > 0 &&
+                        this.player.x + 15 > plat.x &&
+                        this.player.x - 15 < plat.x + plat.width &&
+                        this.player.y + 20 > plat.y &&
+                        this.player.y + 20 < plat.y + plat.height + 10) {
+                        
+                        if (plat.type === 'breakable') {
+                            plat.broken = true;
+                            this.addParticles(plat.x + plat.width/2, plat.y, 'brown');
+                        } else {
+                            this.player.vy = -12;
+                            
+                            if (plat.type === 'spring') {
+                                this.player.vy = -20;
+                                this.addParticles(plat.x + plat.springOffset, plat.y, 'spring');
+                            }
+                            
+                            if (Math.random() > 0.97) {
+                                this.player.jetpack = 100;
+                            } else if (Math.random() > 0.97) {
+                                this.player.propeller = 80;
+                            }
+                        }
+                    }
+                });
+                
+                // Monster collisions
+                this.monsters.forEach((mon, i) => {
+                    mon.x += mon.vx;
+                    if (mon.x < 0 || mon.x > this.width) mon.vx *= -1;
+                    
+                    if (Math.abs(this.player.x - mon.x) < 25 &&
+                        Math.abs(this.player.y - mon.y) < 30) {
+                        
+                        if (this.player.vy > 0 && this.player.y < mon.y) {
+                            this.monsters.splice(i, 1);
+                            this.player.vy = -10;
+                            this.score += 50;
+                            this.addParticles(mon.x, mon.y, 'green');
+                        } else if (this.player.jetpack <= 0 && this.player.propeller <= 0) {
+                            this.endGame();
+                        }
+                    }
+                    
+                    if (mon.type === 'ufo' && 
+                        Math.abs(this.player.x - mon.x) < 50 &&
+                        this.player.y > mon.y && 
+                        this.player.y < mon.y + 120) {
+                        this.player.y += 1.5;
+                        this.player.x += (mon.x - this.player.x) * 0.03;
+                    }
+                });
+                
+                // Projectile collisions
+                this.projectiles.forEach((proj, pi) => {
+                    proj.x += proj.vx;
+                    proj.y += proj.vy;
+                    proj.life--;
+                    
+                    this.monsters.forEach((mon, mi) => {
+                        if (Math.abs(proj.x - mon.x) < 20 &&
+                            Math.abs(proj.y - mon.y) < 20) {
+                            mon.hp--;
+                            if (mon.hp <= 0) {
+                                this.monsters.splice(mi, 1);
+                                this.score += 50;
+                                this.addParticles(mon.x, mon.y, 'green');
+                            }
+                            this.projectiles.splice(pi, 1);
+                        }
+                    });
+                });
+                
+                this.projectiles = this.projectiles.filter(p => p.life > 0);
+                
+                // Cleanup off-screen
+                this.platforms = this.platforms.filter(p => p.y < this.height + this.camera + 200);
+                this.monsters = this.monsters.filter(m => m.y < this.height + this.camera + 200);
+                
+                // Update particles
+                this.particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life--;
+                });
+                this.particles = this.particles.filter(p => p.life > 0);
+                
+                this.updateUI();
+            }
+            
+            spawnPlatformsAhead() {
+                const spawnBuffer = 300;
+                const topOfWorld = this.camera - spawnBuffer;
+                
+                // Find highest platform
+                let highestY = Infinity;
+                let highestX = 200;
+                this.platforms.forEach(p => {
+                    if (p.y < highestY) {
+                        highestY = p.y;
+                        highestX = p.x + p.width/2;
+                    }
+                });
+                
+                // Spawn until we fill the buffer
+                let index = this.platforms.length;
+                while (highestY > topOfWorld) {
+                    const gap = highestY - topOfWorld;
+                    if (gap > 150) {
+                        // Emergency spawn
+                        const emergencyY = highestY - 110;
+                        const emergencyX = Math.max(30, Math.min(310, highestX + (Math.random() - 0.5) * 80));
+                        
+                        this.platforms.push({
+                            x: emergencyX,
+                            y: emergencyY,
+                            width: 60,
+                            height: 15,
+                            type: 'normal',
+                            broken: false,
+                            dx: 0,
+                            springOffset: 0
+                        });
+                        
+                        highestY = emergencyY;
+                        highestX = emergencyX;
+                    } else {
+                        // Normal spawn
+                        highestY = this.addPlatformAbove(highestY, index);
+                        highestX = this.lastPlatformX;
+                        index++;
+                    }
+                }
+            }
+            
+            addParticles(x, y, type) {
+                const colors = {
+                    fire: ['#ff6b35', '#f7931e', '#ffd23f'],
+                    brown: ['#8b4513', '#a0522d', '#cd853f'],
+                    green: ['#2ecc71', '#27ae60', '#229954'],
+                    spring: ['#f1c40f', '#f39c12', '#e67e22']
+                };
+                
+                for (let i = 0; i < 8; i++) {
+                    this.particles.push({
+                        x: x,
+                        y: y,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: (Math.random() - 0.5) * 4,
+                        life: 30,
+                        color: colors[type][Math.floor(Math.random() * colors[type].length)],
+                        size: Math.random() * 6 + 2
+                    });
+                }
+            }
+            
+            draw() {
+                ctx.clearRect(0, 0, this.width, this.height);
+                
+                ctx.save();
+                ctx.translate(0, -this.camera);
+                
+                // Draw platforms
+                this.platforms.forEach(plat => {
+                    if (plat.broken) return;
+                    
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 2;
+                    
+                    if (plat.type === 'normal') {
+                        ctx.fillStyle = '#90EE90';
+                        ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.fillStyle = '#228B22';
+                        ctx.fillRect(plat.x, plat.y, plat.width, 4);
+                    } else if (plat.type === 'moving') {
+                        ctx.fillStyle = '#87CEEB';
+                        ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.beginPath();
+                        ctx.moveTo(plat.x + 10, plat.y + 7);
+                        ctx.lineTo(plat.x + 20, plat.y + 7);
+                        ctx.stroke();
+                    } else if (plat.type === 'breakable') {
+                        ctx.fillStyle = '#D2691E';
+                        ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.beginPath();
+                        ctx.moveTo(plat.x + 15, plat.y);
+                        ctx.lineTo(plat.x + 25, plat.y + 15);
+                        ctx.moveTo(plat.x + 35, plat.y);
+                        ctx.lineTo(plat.x + 25, plat.y + 15);
+                        ctx.stroke();
+                    } else if (plat.type === 'spring') {
+                        ctx.fillStyle = '#90EE90';
+                        ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                        ctx.fillStyle = '#FFD700';
+                        ctx.fillRect(plat.x + plat.springOffset, plat.y - 8, 8, 8);
+                        ctx.strokeRect(plat.x + plat.springOffset, plat.y - 8, 8, 8);
+                    }
+                });
+                
+                // Draw monsters
+                this.monsters.forEach(mon => {
+                    ctx.fillStyle = mon.type === 'ufo' ? '#9b59b6' : '#e74c3c';
+                    ctx.beginPath();
+                    if (mon.type === 'ufo') {
+                        ctx.ellipse(mon.x, mon.y, 20, 10, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.fillStyle = '#3498db';
+                        ctx.beginPath();
+                        ctx.arc(mon.x, mon.y - 5, 10, Math.PI, 0);
+                        ctx.fill();
+                        if (Math.abs(this.player.x - mon.x) < 50 && this.player.y > mon.y) {
+                            ctx.fillStyle = 'rgba(155, 89, 182, 0.3)';
+                            ctx.beginPath();
+                            ctx.moveTo(mon.x - 15, mon.y);
+                            ctx.lineTo(mon.x + 15, mon.y);
+                            ctx.lineTo(mon.x + 30, mon.y + 120);
+                            ctx.lineTo(mon.x - 30, mon.y + 120);
+                            ctx.fill();
+                        }
+                    } else {
+                        ctx.arc(mon.x, mon.y, 15, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(mon.x - 5, mon.y - 3, 4, 0, Math.PI * 2);
+                        ctx.arc(mon.x + 5, mon.y - 3, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#000';
+                        ctx.beginPath();
+                        ctx.arc(mon.x - 5, mon.y - 3, 2, 0, Math.PI * 2);
+                        ctx.arc(mon.x + 5, mon.y - 3, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+                
+                // Draw projectiles
+                ctx.fillStyle = '#2ecc71';
+                this.projectiles.forEach(proj => {
+                    ctx.beginPath();
+                    ctx.arc(proj.x, proj.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                });
+                
+                // Draw particles
+                this.particles.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life / 30;
+                    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+                });
+                ctx.globalAlpha = 1;
+                
+                this.drawPlayer();
+                
+                ctx.restore();
+            }
+            
+            drawPlayer() {
+                const p = this.player;
+                
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                if (!p.facingRight) ctx.scale(-1, 1);
+                
+                if (p.jetpack > 0) {
+                    ctx.fillStyle = '#ff6b35';
+                    ctx.beginPath();
+                    ctx.moveTo(-10, 15);
+                    ctx.lineTo(0, 35 + Math.random() * 10);
+                    ctx.lineTo(10, 15);
+                    ctx.fill();
+                }
+                
+                if (p.propeller > 0) {
+                    ctx.fillStyle = '#f1c40f';
+                    ctx.fillRect(-2, -25, 4, 10);
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.beginPath();
+                    ctx.ellipse(0, -30, 20, 3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+                
+                ctx.fillStyle = '#2ecc71';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 15, 20, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(5, -5, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(7, -5, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#27ae60';
+                ctx.beginPath();
+                ctx.ellipse(12, 0, 4, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-8, 15);
+                ctx.lineTo(-8, 25);
+                ctx.moveTo(8, 15);
+                ctx.lineTo(8, 25);
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            updateUI() {
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('highScore').textContent = 'High: ' + this.highScore;
+            }
+            
+            endGame() {
+                this.gameOver = true;
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    localStorage.setItem('sketchHopHighScore', this.highScore);
+                }
+                document.getElementById('finalScore').textContent = 'Score: ' + this.score;
+                document.getElementById('gameOver').style.display = 'block';
+            }
+            
+            restart() {
+                document.getElementById('gameOver').style.display = 'none';
+                this.reset();
+            }
+            
+            loop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.loop());
+            }
+        }
+        
+        const game = new SketchHop();
+    </script>
+</body>
+</html>
